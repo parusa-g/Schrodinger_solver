@@ -14,7 +14,7 @@ def Plot(x,y,xlabel='',ylabel='',title='',labels=[]):
     
     if ydim == 1:
         ax.plot(x, y)
-    elif ydim > 1:
+    elif ydim == 2:
         for i in range(y.shape[1]):
             if len(labels) > 0:
                 ax.plot(x, y[:,i], label=labels[i])

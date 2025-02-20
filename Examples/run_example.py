@@ -3,9 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET
 sys.path.append('../')
-sys.path.append('../../PseudoTool/')
+sys.path.append('../../PseudoTool')
 from Solve_schrodinger import SolveSchrodingerAtomic
-from ReadPseudoXml import readxml
 # =============================================================================
 def Plot(x,y,xlabel='',ylabel='',title='',labels=[]):
     fig, ax = plt.subplots()
@@ -71,31 +70,15 @@ def main():
     # Example with pseudopotential
     # ----------------------------
     # Re-initialize the class, adjusting the xmax according to the potential data to be used (Vpsloc.dat)
+    # Note also the pseudopotential.
     calc = SolveSchrodingerAtomic(grid_type='mixed', xmin=0., xmax=40.,
-                                  N=30, Np=7, Nu=10, Ng=10, rc=15.)
+                                  N=30, Np=7, Nu=10, Ng=10, rc=15.,
+                                  pp_xml='Si.xml')
         
-    # Read the pseudopotential
-    tree = ET.parse('Si.xml')
-    root = tree.getroot()
-    pp = readxml(root)
-    
-    # Get necessary data from the PP file
-    Dij = pp.get_data('pp_dij')
-    
-    # Only the diagonal elements that matter within Hamann's scheme
-    Dii = np.diag(Dij)
-    
-    # Vanderbilt projectors
-    rmesh = pp.get_data('pp_rmesh')
-    pp_beta = pp.get_data('pp_beta')
-    
-    # See the pp file for this one
-    lbeta = [0, 0, 1, 1, 2, 2]
-    
     # This is the total local potential: Vpsloc = Vloc_atom + V_H + V_xc
     rr, Vpsloc = np.loadtxt('Si_Vpsloc.dat', unpack=True)
     
-    calc.boundPot(rr, Vpsloc, nonloc=True, Dii=Dii, rmesh=rmesh, beta=pp_beta, lbeta=lbeta)
+    calc.boundPot(rr, Vpsloc)
     
     # Compute the 3s state
     # In the framework of pseudopotential, the lowest state being pseudized will be counted as 1s
@@ -109,7 +92,7 @@ def main():
     # Compute the wave functions
     wfn_3s = calc.getWavefunc(vn_3s, rplot)
     wfn_3p = calc.getWavefunc(vn_3p, rplot)
-    wfn = np.column_stack((np.real(wfn_3s), np.real(wfn_3p)))
+    wfn = np.column_stack((wfn_3s, wfn_3p))
     
     Plot(rplot, wfn, xlabel='r [Bohr]', ylabel=r'$\psi(r)$', title='Silicon pseudopotential', labels=['3s', '3p'])
 # ===================================================================================================================

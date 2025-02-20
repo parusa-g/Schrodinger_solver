@@ -1,17 +1,19 @@
+import sys
 import numpy as np
 import scipy.linalg as la
 from scipy.special import legendre as leg
 from scipy.special import eval_legendre as legval
 from scipy.interpolate import make_interp_spline
+sys.path.append('../PseudoTool/')
+from ReadPseudoXml import parse
 #==============================================================================
-
 class SolveSchrodingerAtomic(object):
     '''
     Solves Schrodinger equation for bound-state atomic problem using 
     finite-element method - discrete variable representation (FEM-DVR).
     '''
 #==============================================================================
-    def __init__(self,grid_type,xmin,xmax,N=30,Np=7,Nu=10,Ng=10,rc=15.):
+    def __init__(self,grid_type,xmin,xmax,N=30,Np=7,Nu=10,Ng=10,rc=15.,pp_xml=''):
         self.grid = grid_type
         self.Ng = Ng
         
@@ -36,7 +38,19 @@ class SolveSchrodingerAtomic(object):
         self.xgrid = self.getAxis()
         self.fw, self.bw = self.getWeights()
         self.Kin = self.Kinetic()
+        
         self.nonlocB = False
+        if len(pp_xml) > 0:
+            self.nonlocB = True
+            
+            pp = parse(pp_xml)
+            Dij = pp.get_data('pp_dij')
+            Dii = np.diag(Dij)
+            rmesh = pp.get_data('pp_rmesh')
+            beta = pp.get_data('pp_beta')
+            lbeta = pp.llbeta
+            
+            self.init_nonloc(Dii, rmesh, beta, lbeta)
 #==============================================================================
     def upm(self,xmin,xmax,Np,Nu):
         '''
@@ -308,26 +322,14 @@ class SolveSchrodingerAtomic(object):
 
         return Vnl
 #==============================================================================
-    def boundPot(self,rr,Vloc,nonloc=False,Dii=None,rmesh=None,beta=None,lbeta=None):
+    def boundPot(self,rr,Vloc):
         '''
         Initialize the bound-state potential.
         rr     : radial grid for Vloc
         Vloc   : local potential
-        nonloc : True/False, whether to include non-local potential
-        Dii    : Vanderbilt projector eigenvalues
-        rmesh  : radial grid for the Vanderbilt projector
-        beta   : Vanderbilt projectors
-        lbeta  : angular momentum quantum number for the projectors
         '''
-        
-        # Use the effective Z value
-        self.Z = rr[-1] * Vloc[-1]
-        
+    
         self.Vrb = make_interp_spline(rr, Vloc, k=3)
-
-        if nonloc == True:
-            self.nonlocB = True
-            self.init_nonloc(Dii, rmesh, beta, lbeta)
 #==============================================================================
     def Vlr(self,l):
         Vr = self.Vrb(self.xgrid[1:-1])
@@ -373,8 +375,11 @@ class SolveSchrodingerAtomic(object):
         '''
         
         psi = [self.Psi(eigv,x) for x in rr]
+        psi = np.array(psi)
+        
+        psi = np.real(psi)
+        irmax = np.argmax(np.abs(psi))
+        psi *= np.sign(psi[irmax])
 
         return psi
 #==============================================================================
-    
-    

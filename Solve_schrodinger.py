@@ -373,7 +373,6 @@ class SolveSchrodingerAtomic(object):
         '''
         
         psi = [self.Psi(eigv,x) for x in rr]
-        psi = np.array(psi)
 
         return psi
 #==============================================================================

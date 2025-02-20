@@ -1,7 +1,7 @@
 import sys
 import numpy as np
 import confinement
-from scipy.optimize import minimize_scalar as minimize
+from scipy.optimize import minimize
 from scipy.interpolate import make_interp_spline
 sys.path.append('../')
 sys.path.append('../../PseudoTool/')
@@ -12,7 +12,7 @@ class OptimizeConfinement(solver):
     '''
     Optimize the confinement parameters for a given atomic potential.
     '''
-    def __init__(self,grid_type,xmin,xmax,confinement,rnew,rr,Vr,pp_xml):
+    def __init__(self,grid_type,xmin,xmax,confinement,rnew,rloc,Vloc,pp_xml):
         '''
         grid_type   : [str]    type of grid
         xmin        : [float]  minimum of the grid
@@ -20,14 +20,13 @@ class OptimizeConfinement(solver):
         confinement : [str]    type of confinement potential
         pp_xml      : [str]    pseudopotential file in xml format
         rnew        : [array]  new radial grid
-        rr          : [array]  original radial grid
-        Vr          : [array]  original potential
+        rloc        : [array]  original radial grid
+        Vloc        : [array]  original potential
         '''
         self.confinement = confinement
         self.rnew = rnew
-        self.rloc = rr
-        self.Vloc = Vr
-        
+        self.rloc = rloc
+        self.Vloc = Vloc       
         solver.__init__(self, grid_type, xmin, xmax, pp_xml=pp_xml)
     
         pseudo = parse(pp_xml)
@@ -35,7 +34,7 @@ class OptimizeConfinement(solver):
         pseudowf = pseudo.get_data('pp_pswfc')
         
         self.pseudowf_spl = make_interp_spline(rmesh, pseudowf, k=3)
-        self.llpseudowf = pseudo.llpswfc
+        self.llpseudowf = np.array(pseudo.llpswfc)
     # ----------------------------------------------------------------------------
     def GetVnew(self,alpha,params=[]):
         '''
@@ -45,23 +44,23 @@ class OptimizeConfinement(solver):
         '''
         
         if self.confinement == 'quadratic':
-            Vnew = confinement.ConfineQuadratic(alpha, self.rnew, self.rr, self.Vr)
-            
+            Vnew = confinement.ConfineQuadratic(alpha, self.rnew, self.rloc, self.Vloc)   
+                     
         elif self.confinement == 'quadratic+der1':
-            Vnew = confinement.ConfineQuadratic(alpha, self.rnew, self.rr, self.Vr, der1=True)
+            Vnew = confinement.ConfineQuadratic(alpha, self.rnew, self.rloc, self.Vloc, der1=True)
             
         elif self.confinement == 'quartic':
             if len(params) > 0:
                 V0 = params[0]
                 # alpha in this case is the confinement radius
-                Vnew = confinement.ConfineAsympQuartic(alpha, V0, self.rnew, self.rr, self.Vr)
+                Vnew = confinement.ConfineAsympQuartic(alpha, V0, self.rnew, self.rloc, self.Vloc)
             else:
                 raise ValueError('Provide the asymptotic value of the confinement potential')
             
         elif self.confinement == 'additive':
             if len(params) > 0:
                 n = params[0]
-                Vnew = confinement.ConfineAddOrder(alpha, self.rnew, self.rr, self.Vr, n)
+                Vnew = confinement.ConfineAddOrder(alpha, self.rnew, self.rloc, self.Vloc, n)
             else:
                 raise ValueError('Provide the order of the confinement potential')
             
@@ -69,41 +68,44 @@ class OptimizeConfinement(solver):
             if len(params) > 1:
                 rc = params[0]
                 n = params[1]
-                Vnew = confinement.ConfinePolyOneOverR(alpha, rc, self.rnew, self.rr, self.Vr, n)
+                Vnew = confinement.ConfinePolyOneOverR(alpha, rc, self.rnew, self.rloc, self.Vloc, n)
             else:
                 raise ValueError('Provide the confinement radius and \
                                  the order of the confinement potential')
     
         return Vnew
     # ----------------------------------------------------------------------------
-    def LossFunction(self,alpha,ll,params=[]):
+    def LossFunction(self,alpha,l,params=[]):
         '''
         Loss function to be minimized: mean-squared error between the bound-state from the confined
-        potential and the corresponding pseudo-wavefunction. Optimize for angular momentum channel ll.
-        alpha : [float] confinement parameter
+        potential and the corresponding pseudo-wavefunction. Optimize for angular momentum channel l.
+        alpha : [array] confinement parameter
         params: [list]  additional parameters for the confinement potential
         '''
         
-        Vnew = self.GetVnew(alpha, params)
+        Vnew = self.GetVnew(alpha[0], params)
         
-        solver.boundPot(self.rnew, Vnew)
-        _, vn = solver.getBound(l=ll, n=ll+1)
-        wfn = solver.getWavefunc(vn, self.rnew)
+        super().boundPot(self.rnew, Vnew)
+        _, vn = super().getBound(l=l, n=l+1)
+        wfn = super().getWavefunc(vn, self.rnew)
         
-        mse = np.mean((self.pseudowf_spl(self.rnew) - wfn)**2)
+        # I expect only one pseudo-wavefunction per l channel
+        il, = np.where(self.llpseudowf == l)[0]
+        mse = np.mean((self.pseudowf_spl(self.rnew)[:,il] - wfn)**2)
         
         return mse
     # ----------------------------------------------------------------------------
-    def OptimizeConfinement(self,ll,params=[]):
+    def Run(self,l,alpha0,params=[]):
         '''
-        Optimize the confinement parameter for a given angular momentum channel ll.
-        ll     : [int]   angular momentum channel
+        Optimize the confinement parameter for a given angular momentum channel l.
+        l      : [int]   angular momentum channel
+        alpha0 : [array] initial guess for the confinement parameter
         params : [list]  additional parameters for the confinement potential
         '''
         
-        res = minimize(self.LossFunction, args=(ll,params), bounds=(0., None))
+        res = minimize(self.LossFunction, alpha0, args=(l,params))
         
-        if res.succsess:
+        if res.success:
             return res.x
         else:
             raise ValueError('Optimization failed. Reason: {}'.format(res.message))

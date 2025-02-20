@@ -327,7 +327,6 @@ class SolveSchrodingerAtomic(object):
         Initialize the bound-state potential.
         rr     : radial grid for Vloc
         Vloc   : local potential
-        pp_xml : path to the pseudopotential xml file
         '''
     
         self.Vrb = make_interp_spline(rr, Vloc, k=3)

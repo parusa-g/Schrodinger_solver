@@ -78,13 +78,13 @@ class OptimizeConfinement(solver):
     def GetConfinedBoundState(self,alpha,l,n=None,params=[]):
         '''
         Get the bound-state for a given angular momentum channel l.
-        alpha : [array] confinement parameter
+        alpha : [float] confinement parameter
         l     : [int]   angular momentum channel
         n     : [int]   principal quantum number
         params: [list]  additional parameters for the confinement potential
         '''
         
-        Vnew = self.GetVnew(alpha[0], params)
+        Vnew = self.GetVnew(alpha, params)
         
         super().boundPot(self.rnew, Vnew)
         if n != None:
@@ -104,7 +104,7 @@ class OptimizeConfinement(solver):
         params: [list]  additional parameters for the confinement potential
         '''
         
-        wfn = self.GetConfinedBoundState(alpha,l,params=params)
+        wfn = self.GetConfinedBoundState(alpha[0],l,params=params)
         
         # I expect only one pseudo-wavefunction per l channel
         il, = np.where(self.llpseudowf == l)[0]

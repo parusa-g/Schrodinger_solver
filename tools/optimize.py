@@ -75,6 +75,27 @@ class OptimizeConfinement(solver):
     
         return Vnew
     # ----------------------------------------------------------------------------
+    def GetConfinedBoundState(self,alpha,l,n=None,params=[]):
+        '''
+        Get the bound-state for a given angular momentum channel l.
+        alpha : [array] confinement parameter
+        l     : [int]   angular momentum channel
+        n     : [int]   principal quantum number
+        params: [list]  additional parameters for the confinement potential
+        '''
+        
+        Vnew = self.GetVnew(alpha[0], params)
+        
+        super().boundPot(self.rnew, Vnew)
+        if n != None:
+            _, vn = super().getBound(l=l, n=n)
+            wfn = super().getWavefunc(vn, self.rnew)
+        else:
+            _, vn = super().getBound(l=l, n=l+1)
+            wfn = super().getWavefunc(vn, self.rnew)
+        
+        return wfn
+    # ----------------------------------------------------------------------------
     def LossFunction(self,alpha,l,params=[]):
         '''
         Loss function to be minimized: mean-squared error between the bound-state from the confined
@@ -83,11 +104,7 @@ class OptimizeConfinement(solver):
         params: [list]  additional parameters for the confinement potential
         '''
         
-        Vnew = self.GetVnew(alpha[0], params)
-        
-        super().boundPot(self.rnew, Vnew)
-        _, vn = super().getBound(l=l, n=l+1)
-        wfn = super().getWavefunc(vn, self.rnew)
+        wfn = self.GetConfinedBoundState(alpha,l,params=params)
         
         # I expect only one pseudo-wavefunction per l channel
         il, = np.where(self.llpseudowf == l)[0]

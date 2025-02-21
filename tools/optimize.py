@@ -12,55 +12,61 @@ class OptimizeConfinement(solver):
     '''
     Optimize the confinement parameters for a given atomic potential.
     '''
-    def __init__(self,grid_type,xmin,xmax,confinement,rnew,rloc,Vloc,pp_xml):
+    def __init__(self,grid_type,xmin,xmax,confinement,rpot,rloc,Vloc,pp_xml):
         '''
         grid_type   : [str]    type of grid
         xmin        : [float]  minimum of the grid
         xmax        : [float]  maximum of the grid
         confinement : [str]    type of confinement potential
         pp_xml      : [str]    pseudopotential file in xml format
-        rnew        : [array]  new radial grid
+        rpot        : [array]  new radial grid for the confined potential
         rloc        : [array]  original radial grid
         Vloc        : [array]  original potential
         '''
         self.confinement = confinement
-        self.rnew = rnew
+        
+        # Original potential data
         self.rloc = rloc
-        self.Vloc = Vloc       
+        self.Vloc = Vloc
+        
+        # Schrodinger solver        
         solver.__init__(self, grid_type, xmin, xmax, pp_xml=pp_xml)
     
         pseudo = parse(pp_xml)
-        rmesh = pseudo.get_data('pp_rmesh')
-        pseudowf = pseudo.get_data('pp_pswfc')
         
-        self.pseudowf_spl = make_interp_spline(rmesh, pseudowf, k=3)
+        # Grid for the wave function
+        self.rmesh = pseudo.get_data('pp_rmesh')
+        self.pseudowf = pseudo.get_data('pp_pswfc')
         self.llpseudowf = np.array(pseudo.llpswfc)
+        
+        # Grid for the confined potential 
+        self.rpot = rpot
     # ----------------------------------------------------------------------------
     def GetVnew(self,alpha,params=[]):
         '''
-        Get the new potential on the new grid rnew.
+        Get the new potential on the new grid rpot.
         alpha : [float] confinement parameter
         params: [list]  additional parameters for the confinement potential
         '''
         
         if self.confinement == 'quadratic':
-            Vnew = confinement.ConfineQuadratic(alpha, self.rnew, self.rloc, self.Vloc)   
+            Vnew = confinement.ConfineQuadratic(alpha, self.rpot, self.rloc, self.Vloc)   
                      
         elif self.confinement == 'quadratic+der1':
-            Vnew = confinement.ConfineQuadratic(alpha, self.rnew, self.rloc, self.Vloc, der1=True)
+            Vnew = confinement.ConfineQuadratic(alpha, self.rpot, self.rloc, self.Vloc, der1=True)
             
         elif self.confinement == 'quartic':
             if len(params) > 0:
                 V0 = params[0]
                 # alpha in this case is the confinement radius
-                Vnew = confinement.ConfineAsympQuartic(alpha, V0, self.rnew, self.rloc, self.Vloc)
+                Vnew = confinement.ConfineAsympQuartic(alpha, V0, self.rpot, self.rloc, self.Vloc)
             else:
                 raise ValueError('Provide the asymptotic value of the confinement potential')
             
         elif self.confinement == 'additive':
             if len(params) > 0:
                 n = params[0]
-                Vnew = confinement.ConfineAddOrder(alpha, self.rnew, self.rloc, self.Vloc, n)
+                Vnew = confinement.ConfineAddOrder(alpha, self.rpot, self.rloc, self.Vloc, n)
             else:
                 raise ValueError('Provide the order of the confinement potential')
             
@@ -68,7 +74,7 @@ class OptimizeConfinement(solver):
             if len(params) > 1:
                 rc = params[0]
                 n = params[1]
-                Vnew = confinement.ConfinePolyOneOverR(alpha, rc, self.rnew, self.rloc, self.Vloc, n)
+                Vnew = confinement.ConfinePolyOneOverR(alpha, rc, self.rpot, self.rloc, self.Vloc, n)
             else:
                 raise ValueError('Provide the confinement radius and \
                                  the order of the confinement potential')
@@ -86,13 +92,13 @@ class OptimizeConfinement(solver):
         
         Vnew = self.GetVnew(alpha, params)
         
-        super().boundPot(self.rnew, Vnew)
+        super().boundPot(self.rpot, Vnew)
         if n != None:
             _, vn = super().getBound(l=l, n=n)
-            wfn = super().getWavefunc(vn, self.rnew)
+            wfn = super().getWavefunc(vn, self.rmesh)
         else:
             _, vn = super().getBound(l=l, n=l+1)
-            wfn = super().getWavefunc(vn, self.rnew)
+            wfn = super().getWavefunc(vn, self.rmesh)
         
         return wfn
     # ----------------------------------------------------------------------------
@@ -108,7 +114,7 @@ class OptimizeConfinement(solver):
         
         # I expect only one pseudo-wavefunction per l channel
         il, = np.where(self.llpseudowf == l)[0]
-        mse = np.mean((self.pseudowf_spl(self.rnew)[:,il] - wfn)**2)
+        mse = np.mean((self.pseudowf[:,il] - wfn)**2)
         
         return mse
     # ----------------------------------------------------------------------------

@@ -78,7 +78,8 @@ class OptimizeConfinement(solver):
             else:
                 raise ValueError('Provide the confinement radius and \
                                  the order of the confinement potential')
-    
+
+                
         return Vnew
     # ----------------------------------------------------------------------------
     def GetConfinedBoundState(self,alpha,l,n=None,params=[]):

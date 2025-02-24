@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.interpolate import make_interp_spline
+from fornberg import fornberg_weights
 # ==============================================================================
 def ConfineQuadratic(alpha,rnew,rr,V,der1=False):
    '''
@@ -29,27 +30,26 @@ def ConfineQuadratic(alpha,rnew,rr,V,der1=False):
    Vnew[Ir] = alpha * (rnew[Ir] - R)**2 + V[-1] 
    
    if der1:
-       h = 1e-6
-       dV = (spl(R+h) - spl(R-h)) / (2*h)
+       m = 1
+       w = fornberg_weights(R, rr, m)
+       dV = np.dot(V, w[:,m])
        Vnew[Ir] += dV * (rnew[Ir] - R)
 
    return Vnew
 # ====================================================================================================
-def GetVnewQuartic(rnew,rc,R,V0,a0,spl,h=1e-6):
+def GetVnewQuartic(rnew,rc,R,V0,a0,a1):
    '''
     Get the new potential with fourth order polynomial with continuity up to the first derivative
     at the last point of the original potential and asymptotically goes to V0 at rc with first
     and the second derivatives at rc being zero.
     rnew: new radial grid
     rc  : confinement radius
-    R   : last point of the original potential
+    R   : last grid point of the original potential
     V0  : asymptotic value of the confinement potential
-    a0  : first derivative of the original potential at R
-    spl : spline interpolator for the original potential
-    h   : small number for numerical differentiation
+    a0  : last point of the original potential
+    a1  : first derivative of the original potential at the last point
    ''' 
    v = rc - R
-   a1 = (spl(R+h) - spl(R-h)) / (2*h)
    
    b = np.zeros(3)
    b[0] = V0 - a0 - a1*v
@@ -92,7 +92,9 @@ def ConfineAsympQuartic(rc,V0,rnew,rr,V):
    Vnew[Ir] = spl(rnew[Ir])
 
    Ir, = np.where((rnew > R) & (rnew <= rc))
-   Vnew[Ir] = GetVnewQuartic(rnew[Ir], rc, R, V0, V[-1], spl)
+   w = fornberg_weights(R, rr, 1)
+   dV = np.dot(V, w[:,1])
+   Vnew[Ir] = GetVnewQuartic(rnew[Ir], rc, R, V0, V[-1], dV)
               
    Ir, = np.where(rnew > rc)
    Vnew[Ir] = V0
@@ -105,8 +107,7 @@ def ConfineAddOrder(alpha,rnew,rr,V,n=4):
                     V(r) = alpha * (r - R)^n + V(R) + dV * (r - R)
                     
    R is the last grid point of the original potential.
-   dV is the first derivative of the original potential at the last point, calculated
-   with a central difference scheme.
+   dV is the first derivative of the original potential at the last point
    
    alpha : [float]   scaling factor of the confinement potential
    rnew  : [array]   new radial grid
@@ -125,34 +126,42 @@ def ConfineAddOrder(alpha,rnew,rr,V,n=4):
    
    Ir, = np.where(rnew > R)
    
-   h = 1e-6
-   dV = (spl(R+h) - spl(R-h)) / (2*h)
+   w = fornberg_weights(R, rr, 1)
+   dV = np.dot(V, w[:,1])
 
    Vnew[Ir] = alpha * (rnew[Ir] - R)**n + V[-1] + dV * (rnew[Ir] - R)
    
    return Vnew
 # ====================================================================================================
-def GetCoeffVnewOneOverR(R,Vlast,dVlast):
+def GetCoeffVnewOneOverR(R,dVlast):
     '''
-    Get the coefficients for the intermediate zone potential with continuity up to the first derivative
+    Get the coefficients for the intermediate zone potential with continuity up to the 2nd derivative
     at the last point of the original potential. The potential is of the form,
                                
-                                V(r) = a1/r + a2/r^2
+                                V(r) = \sum_{i=0}^{n} a_i/r^i
                                 
     R     : [float]  last point of the original potential
-    Vlast : [float]  value of the original potential at R
-    dVlast: [float]  first derivative of the original potential at R
+    dVlast: [array]  derivatives of the original potential at R, starting from zero-th order (Vlast)
     '''
     
-    A = np.zeros([2,2])
-    b = np.zeros(2)
+    n = len(dVlast)
+    if n > 3:
+        raise ValueError('Derivative order must be less than 3')
     
-    A[0,0] = 1.; A[0,1] = 1./R
-    A[1,0] = 1.; A[1,1] = 2./R**2
+    A = np.zeros([3, 3])
+    A[0,0] = 1 / R ; A[0,1] = 1 / R**2; A[0,2] = 1 / R**3
+    A[1,0] = 1 / R ; A[1,1] = 2 / R**2; A[1,2] = 3 / R**3
+    A[2,0] = 2 / R ; A[2,1] = 6 / R**2; A[2,2] = 12/ R**3
     
-    b[0] = Vlast * R
-    b[1] = -dVlast * R**2
+    b = np.zeros(3)
+    b[0] = np.copy(dVlast[0])
+    b[1] = -R * np.copy(dVlast[1])
+    b[2] = R**2 * np.copy(dVlast[2])
     
+    if n == 2:
+        A = A[:2,:2]
+        b = b[:2]
+        
     x = np.linalg.solve(A,b)
     
     return x
@@ -160,12 +169,12 @@ def GetCoeffVnewOneOverR(R,Vlast,dVlast):
 def ConfinePolyOneOverR(alpha,rc,rnew,rr,V,n=4):
     '''
     Confinement r > R:
-                    V(r) = x1/r + x2/r^2,   if r <= rc
-                    V(r) = alpha * (r - rc)^n + a0 + a1*(r - rc),   if r > rc
+                    V(r) = x1/r + x2/r^2 + x3/r^3,             if r <= rc
+                    V(r) = alpha * (r - rc)^n + a0 + a1*(r - rc) + a2*(r - rc)^2,   if r > rc
     
     R is the last grid point of the original potential.
-    x1, x2 are determined by the continuity of the potential at R up to the first derivative.
-    a0, a1 are determined by the continuity of the potential at rc up to the first derivative.
+    x1, x2 are determined by the continuity of the potential at R up to the second derivative.
+    a0, a1 are determined by the continuity of the potential at rc up to the second derivative.
     
     alpha : scaling factor of the confinement potential
     rc    : confinement radius
@@ -175,25 +184,31 @@ def ConfinePolyOneOverR(alpha,rc,rnew,rr,V,n=4):
     n     : order of the confinement potential
     '''
     
+    if n < 3: 
+        raise ValueError('Order of the potential must be greater than 2')
+    
     Vnew = np.zeros_like(rnew) 
     
     R = rr[-1]
     spl = make_interp_spline(rr,V,k=3)
     
-    h = 1e-6
-    dV = (spl(R+h) - spl(R-h)) / (2*h)
+    w = fornberg_weights(R, rr, 2)
+    dV = np.dot(V, w[:,1])
+    d2V = np.dot(V, w[:,2])
     
     Ir, = np.where(rnew <= R)
     Vnew[Ir] = spl(rnew[Ir])
     
     Ir, = np.where((rnew > R) & (rnew <= rc))
-    x = GetCoeffVnewOneOverR(R, V[-1], dV)
-    Vnew[Ir] = x[0]/rnew[Ir] + x[1]/rnew[Ir]**2
+    x = GetCoeffVnewOneOverR(R, [V[-1], dV, d2V])
+    Vnew[Ir] = x[0]/rnew[Ir] + x[1]/rnew[Ir]**2 + x[2]/rnew[Ir]**3
     
     Ir, = np.where(rnew > rc)
-    a0 = x[0]/rc + x[1]/rc**2
-    a1 = -x[0]/rc**2 - 2*x[1]/rc**3
-    Vnew[Ir] = alpha * (rnew[Ir] - rc)**n + a0 + a1*(rnew[Ir] - rc)
+    a0 = x[0]/rc + x[1]/rc**2 + x[2]/rc**3
+    a1 = -x[0]/rc**2 - 2*x[1]/rc**3 - 3*x[2]/rc**4
+    a2 = 2*x[0]/rc**3 + 6*x[1]/rc**4 + 12*x[2]/rc**5
+    Vnew[Ir] = alpha * (rnew[Ir] - rc)**n + a0 + a1*(rnew[Ir] - rc) \
+                + a2*(rnew[Ir] - rc)**2
     
     return Vnew
 # ==================================================================================================== 
@@ -207,15 +222,16 @@ def ConfinePolyOneOverRwithFermi(alpha,rc,V0,rnew,rr,V):
     spl = make_interp_spline(rr, V, k=3)
     R = rr[-1]
    
-    h = 1e-6
-    dV = (spl(R+h) - spl(R-h)) / (2*h)
+    w = fornberg_weights(R, rr, 2)
+    dV = np.dot(V, w[:,1])
+    d2V = np.dot(V, w[:,2])
    
     Ir, = np.where(rnew <= R)
     Vnew[Ir] = spl(rnew[Ir])
    
     Ir, = np.where(rnew > R)
-    x = GetCoeffVnewOneOverR(R, V[-1], dV)
-    Vnew[Ir] = x[0]/rnew[Ir] + x[1]/rnew[Ir]**2
+    x = GetCoeffVnewOneOverR(R, [V[-1], dV, d2V])
+    Vnew[Ir] = x[0]/rnew[Ir] + x[1]/rnew[Ir]**2 + x[2]/rnew[Ir]**3
    
     Vnew = Vnew + VFermi
    

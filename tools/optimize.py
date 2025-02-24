@@ -143,18 +143,21 @@ class OptimizeConfinement(solver):
         else:
             raise ValueError('Optimization failed. Reason: {}'.format(res.message))
     # ----------------------------------------------------------------------------
-    def GetProjectors(self,ns,ls,alpha_list,params,fout='projectors.dat'):
+    def GetProjectors(self,ns,ls,param_list,fout='projectors.dat'):
         rgrid = self.rmesh[1:]
         Nr = len(rgrid)
         Nstates = len(ns)
         projs = np.zeros([Nr,Nstates])
         
         for i in range(Nstates):
-
+            params = param_list[i]
+            alpha = params[0]
+            
             print(f'Calculating n = {ns[i]}, l = {ls[i]}')
-
-            alpha = alpha_list[ls[i]]
-            psi = self.GetConfinedBoundState(alpha, l=ls[i], n=ns[i], params=params)
+            print('alpha:', alpha)
+            print('params:', params[1:])
+            
+            psi = self.GetConfinedBoundState(alpha, l=ls[i], n=ns[i], params=params[1:])
 
             projs[:,i] = np.copy(psi[1:])
 

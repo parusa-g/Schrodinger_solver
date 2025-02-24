@@ -154,8 +154,8 @@ class OptimizeConfinement(solver):
             alpha = params[0]
             
             print(f'Calculating n = {ns[i]}, l = {ls[i]}')
-            print('alpha:', alpha)
-            print('params:', params[1:])
+            print('  alpha:', alpha)
+            print('  params:', params[1:])
             
             psi = self.GetConfinedBoundState(alpha, l=ls[i], n=ns[i], params=params[1:])
 

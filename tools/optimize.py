@@ -78,8 +78,17 @@ class OptimizeConfinement(solver):
             else:
                 raise ValueError('Provide the confinement radius and \
                                  the order of the confinement potential')
-
                 
+        elif self.confinement == 'one_over_r+Fermi':
+            if len(params) > 1:
+                rc = params[0]
+                V0 = params[1]
+                Vnew = confinement.ConfinePolyOneOverRwithFermi(alpha, rc, V0, self.rpot, self.rloc, self.Vloc)
+            else:
+                raise ValueError('Provide the confinement radius and \
+                                  the asymptotic value of the confinement potential')    
+            
+    
         return Vnew
     # ----------------------------------------------------------------------------
     def GetConfinedBoundState(self,alpha,l,n=None,params=[]):

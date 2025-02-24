@@ -196,4 +196,28 @@ def ConfinePolyOneOverR(alpha,rc,rnew,rr,V,n=4):
     Vnew[Ir] = alpha * (rnew[Ir] - rc)**n + a0 + a1*(rnew[Ir] - rc)
     
     return Vnew
-# ====================================================================================================
+# ==================================================================================================== 
+def ConfinePolyOneOverRwithFermi(alpha,rc,V0,rnew,rr,V):
+   
+    Vnew = np.zeros_like(rnew)
+    VFermi = np.zeros_like(rnew)
+   
+    VFermi = V0 / (1 + np.exp((rc - rnew)/ alpha))
+   
+    spl = make_interp_spline(rr, V, k=3)
+    R = rr[-1]
+   
+    h = 1e-6
+    dV = (spl(R+h) - spl(R-h)) / (2*h)
+   
+    Ir, = np.where(rnew <= R)
+    Vnew[Ir] = spl(rnew[Ir])
+   
+    Ir, = np.where(rnew > R)
+    x = GetCoeffVnewOneOverR(R, V[-1], dV)
+    Vnew[Ir] = x[0]/rnew[Ir] + x[1]/rnew[Ir]**2
+   
+    Vnew = Vnew + VFermi
+   
+    return Vnew
+# ====================================================================================================    

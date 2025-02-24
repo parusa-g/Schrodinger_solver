@@ -150,7 +150,7 @@ class OptimizeConfinement(solver):
         projs = np.zeros([Nr,Nstates])
         
         for i in range(Nstates):
-            params = param_list[i]
+            params = param_list[ls[i]]
             alpha = params[0]
             
             print(f'Calculating n = {ns[i]}, l = {ls[i]}')

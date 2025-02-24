@@ -142,6 +142,32 @@ class OptimizeConfinement(solver):
             return res.x
         else:
             raise ValueError('Optimization failed. Reason: {}'.format(res.message))
+    # ----------------------------------------------------------------------------
+    def GetProjectors(self,ns,ls,alpha_list,params,fout='projectors.dat'):
+        rgrid = self.rmesh[1:]
+        Nr = len(rgrid)
+        Nstates = len(ns)
+        projs = np.zeros([Nr,Nstates])
+        
+        for i in range(Nstates):
+
+            print(f'Calculating n = {ns[i]}, l = {ls[i]}')
+
+            alpha = alpha_list[ls[i]]
+            psi = self.GetConfinedBoundState(alpha, l=ls[i], n=ns[i], params=params)
+
+            projs[:,i] = np.copy(psi[1:])
+
+        xgrid = np.log(rgrid)
+        proj_dat = np.column_stack((xgrid, rgrid, projs))
+
+        with open(fout, 'w') as f:
+            f.write(f"{Nr} {Nstates}\n")
+            f.write(" ".join(map(str, ls)) + "\n")
+            for i in range(Nr):
+                f.write(" ".join([f"{x:.12f}" for x in proj_dat[i,:]]) + "\n")
+        
+        print('Written the projectors data to', fout)
 # =================================================================================
         
         

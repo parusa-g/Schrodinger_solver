@@ -1,2 +1,2 @@
 # Schrodinger_solver
-Solves atomic bound-state problem with local or non-local potential
+Solves atomic bound and scattering atomic problem with local or non-local potential

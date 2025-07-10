@@ -499,7 +499,7 @@ class SolveSchrodingerAtomic(object):
         R = self.GetCoulombBoundaryCondition(l,real)
         c = R[0]*const + R[1]
         
-        val = c * self.lobatto(self.Ne-1,self.Ng,x) / np.sqrt(self.bw[-1])
+        val = c * self.LobattoPoly(self.Ne-1,self.Ng,x) / np.sqrt(self.bw[-1])
         
         return val
 #==============================================================================
@@ -622,7 +622,7 @@ class SolveSchrodingerAtomic(object):
         
         for E in KinE:
             v = self.GetScatt(E,l,real)
-            yR = self.Psix(v,R,l,bound=False,real=real)
+            yR = self.Psix(v,R,bound=False,l=l,real=real)
             H = self.CoulombFunction(l,R,real)
 
             S = (yR - H[0]) / H[1]

@@ -92,9 +92,10 @@ def main():
     KinE = np.linspace(0.1, 6.0, 100)
 
     print('Computing scattering phase')
-    phase_s = calc.GetScatteringPhase(KinE, l=0)
-    phase_p = calc.GetScatteringPhase(KinE, l=1)
-    phase_d = calc.GetScatteringPhase(KinE, l=2)
+    smooth = True
+    phase_s = calc.GetScatteringPhase(KinE, l=0, smooth=smooth)
+    phase_p = calc.GetScatteringPhase(KinE, l=1, smooth=smooth)
+    phase_d = calc.GetScatteringPhase(KinE, l=2, smooth=smooth)
     phase = np.column_stack((phase_s, phase_p, phase_d))
 
     Plot(KinE, phase, xlabel='Kinetic energy [Ha]', ylabel=r'Phase [$\pi$]', title='Silicon scattering phase', labels=['s', 'p', 'd'])
@@ -102,14 +103,15 @@ def main():
     print('\n')
 
     # Compute the radial integral
+    smooth = False
     print('Computing radial integrals for 3s')
-    radint_3s = calc.GetRadialIntegral(KinE, n=3, l=0, verbose='low')
+    radint_3s_abs, radint_3s_angle = calc.GetRadialIntegral(KinE, n=3, l=0, verbose='low', store_type='abs-angle', smooth_phase=smooth)
 
     print('Computing radial integrals for 3p')
-    radint_3p = calc.GetRadialIntegral(KinE, n=3, l=1, verbose='low')
+    radint_3p_abs, radint_3p_angle = calc.GetRadialIntegral(KinE, n=3, l=1, verbose='low', store_type='abs-angle', smooth_phase=smooth)
 
-    radint_abs = np.column_stack((np.abs(radint_3s), np.abs(radint_3p)))
-    radint_angle = np.column_stack((np.angle(radint_3s)/np.pi, np.angle(radint_3p)/np.pi))
+    radint_abs = np.column_stack((radint_3s_abs, radint_3p_abs))
+    radint_angle = np.column_stack((radint_3s_angle, radint_3p_angle))
     
     Plot(KinE, radint_abs, xlabel='Kinetic energy [Ha]', ylabel=r'Absolute value', title='Silicon radial integrals', 
          labels=[r'$s \rightarrow p$', r'$p \rightarrow s$', r'$p \rightarrow d$'])
@@ -120,9 +122,8 @@ def main():
 
     # Example with pseudopotential
     # ----------------------------
-    # Re-initialize the class, adjusting the xmax according to the potential data to be used (Vpsloc.dat)
-    # Note also the pseudopotential.
-    calc = SolveSchrodingerAtomic(grid_type='mixed', xmin=0., xmax=40.,
+    # Re-initialize the class. Note also the pseudopotential xml file.
+    calc = SolveSchrodingerAtomic(grid_type='mixed', xmin=0., xmax=100.,
                                   N=30, Np=7, Nu=10, Ng=10, rc=15.,
                                   pp_xml='Si.xml')
         
@@ -173,9 +174,10 @@ def main():
     KinE = np.linspace(0.1, 6.0, 100)
 
     print('Computing scattering phase')
-    phase_s = calc.GetScatteringPhase(KinE, l=0)
-    phase_p = calc.GetScatteringPhase(KinE, l=1)
-    phase_d = calc.GetScatteringPhase(KinE, l=2)
+    smooth = True
+    phase_s = calc.GetScatteringPhase(KinE, l=0, smooth=smooth)
+    phase_p = calc.GetScatteringPhase(KinE, l=1, smooth=smooth)
+    phase_d = calc.GetScatteringPhase(KinE, l=2, smooth=smooth)
     phase = np.column_stack((phase_s, phase_p, phase_d))
 
     Plot(KinE, phase, xlabel='Kinetic energy [Ha]', ylabel=r'Phase [$\pi$]', title='Silicon scattering phase', labels=['s', 'p', 'd'])
@@ -183,14 +185,15 @@ def main():
     print('\n')
 
     # Compute the radial integral
+    smooth = True
     print('Computing radial integrals for 3s')
-    radint_3s = calc.GetRadialIntegral(KinE, n=1, l=0, verbose='low')
+    radint_3s_abs, radint_3s_angle = calc.GetRadialIntegral(KinE, n=1, l=0, verbose='low', store_type='abs-angle', smooth_phase=smooth)
 
     print('Computing radial integrals for 3p')
-    radint_3p = calc.GetRadialIntegral(KinE, n=2, l=1, verbose='low')
+    radint_3p_abs, radint_3p_angle = calc.GetRadialIntegral(KinE, n=2, l=1, verbose='low', store_type='abs-angle', smooth_phase=smooth)
 
-    radint_abs = np.column_stack((np.abs(radint_3s), np.abs(radint_3p)))
-    radint_angle = np.column_stack((np.angle(radint_3s)/np.pi, np.angle(radint_3p)/np.pi))
+    radint_abs = np.column_stack((radint_3s_abs, radint_3p_abs))
+    radint_angle = np.column_stack((radint_3s_angle, radint_3p_angle))
     
     Plot(KinE, radint_abs, xlabel='Kinetic energy [Ha]', ylabel=r'Absolute value', title='Silicon radial integrals', 
          labels=[r'$s \rightarrow p$', r'$p \rightarrow s$', r'$p \rightarrow d$'])

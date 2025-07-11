@@ -434,8 +434,20 @@ class SolveSchrodingerAtomic(object):
         rr     : radial grid for Vloc
         Vloc   : local potential
         '''
+        spl = make_interp_spline(rr, Vloc, k=3)
+        xpoints = self.xgrid[1:-1]
+        Npoints = len(xpoints)
+        
         self.Z = rr[-1] * Vloc[-1]
-        self.Vr = make_interp_spline(rr, Vloc, k=3)
+        self.Vr = np.zeros(Npoints)
+
+        # Interpolate the local potential onto the femdvr grid
+        Ir, = np.where(xpoints <= rr[-1])
+        self.Vr[Ir] = spl(xpoints[Ir])
+
+        # Extrapolate the potential for points beyond the last point of the input
+        Ir, = np.where(xpoints > rr[-1])
+        self.Vr[Ir] = self.Z / xpoints[Ir]
 #==============================================================================
     def InitScattering(self,E):
         '''
@@ -504,9 +516,8 @@ class SolveSchrodingerAtomic(object):
         return val
 #==============================================================================
     def Vlr(self,l):
-        Vr = self.Vr(self.xgrid[1:-1])
         Vl = 0.5 * l*(l+1) / self.xgrid[1:-1]**2
-        Vlr = Vr + Vl
+        Vlr = self.Vr + Vl
         
         return Vlr 
 #==============================================================================
@@ -605,7 +616,7 @@ class SolveSchrodingerAtomic(object):
 
         return psi
 #==============================================================================
-    def GetScatteringPhase(self,KinE,l,real=False):
+    def GetScatteringPhase(self,KinE,l,smooth=False,real=False):
         '''
         Calculate the scattering phase at infinity.
         KinE    : kinetic (scattering) energy [Ha]
@@ -633,18 +644,40 @@ class SolveSchrodingerAtomic(object):
 
             phase.append(S)
 
-        Sl = np.array(phase)
+        phase = np.array(phase)
+        Sl = np.angle(phase) / np.pi
 
-        return np.angle(Sl) / np.pi
+        if smooth:
+            Sl = self.SmoothPhase(Sl)
+
+        return Sl
 #==============================================================================
-    def GetRadialIntegral(self,KinE,n,l,verbose='low',Boundwfc=[]):
+    def SmoothPhase(self,phase):
+        '''
+        Smoothen the phase so that there is no jumps due to the phase unwrapping.
+        phase : array of phases in units of pi
+        '''
+
+        phase_smooth = np.copy(phase)
+
+        for i in range(1, len(phase)):
+            if phase[i] - phase_smooth[i-1] > 1.5:
+                phase_smooth[i] -= 2.0
+            elif phase[i] - phase_smooth[i-1] < -1.5:
+                phase_smooth[i] += 2.0
+        
+        return phase_smooth
+#==============================================================================
+    def GetRadialIntegral(self,KinE,n,l,verbose='low',store_type='real-imag',smooth_phase=False,Boundwfc=[]):
         '''
         Calculate the photo-emission radial integral.
-        KinE     : kinetic (scattering) energy [Ha]
-        n        : principal quantum number
-        l        : angular momentum channel
-        verbose  : verbosity level ('low', 'high')
-        Boundwfc : bound-state wave function for the radial integral
+        KinE         : kinetic (scattering) energy [Ha]
+        n            : principal quantum number
+        l            : angular momentum channel
+        verbose      : verbosity level ('low', 'high')
+        store-type   : type of the output ('real-imag' or 'abs-angle')
+        smooth_phase : if store_type is 'abs-angle', smoothen the phase
+        Boundwfc     : bound-state wave function for the radial integral
         '''
         
         if len(Boundwfc) == 0:
@@ -663,8 +696,13 @@ class SolveSchrodingerAtomic(object):
             l_final = [1]
         else:
             l_final = [l-1, l+1]
-            
-        radint = np.zeros((len(KinE), len(l_final)), dtype=complex)
+        
+        if store_type == 'real-imag':
+            radint = np.zeros((len(KinE), len(l_final)), dtype=complex)
+
+        elif store_type == 'abs-angle':
+            radint_abs = np.zeros((len(KinE), len(l_final)), dtype=float)
+            radint_angle = np.zeros((len(KinE), len(l_final)), dtype=float)
         
         for i,l1 in enumerate(l_final):
             
@@ -677,7 +715,20 @@ class SolveSchrodingerAtomic(object):
                 v = self.GetScatt(E, l1)
                 dot = np.dot(np.conj(v), rb)
                 
-                radint[j,i] = dot
-                
-        return radint
+                if store_type == 'real-imag':
+                    radint[j,i] = dot
+                elif store_type == 'abs-angle':
+                    radint_abs[j,i] = np.abs(dot)
+                    radint_angle[j,i] = np.angle(dot) / np.pi
+
+            
+        if store_type == 'real-imag':
+            return radint
+        
+        elif store_type == 'abs-angle':
+            if smooth_phase:
+                for ich in range(len(l_final)):
+                    radint_angle[:,ich] = self.SmoothPhase(radint_angle[:,ich])
+
+            return radint_abs, radint_angle
 #==============================================================================
